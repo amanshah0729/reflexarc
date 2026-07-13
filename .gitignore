@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+# Raw per-trial arrays are large and regenerable; the jsonl manifests and the
+# figures are the evidence and are committed.
+runs/**/npz/
+runs/*.log

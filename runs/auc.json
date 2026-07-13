@@ -1,0 +1,9 @@
+{
+  "fn": 0.6667,
+  "ft": 0.5118,
+  "cone_ratio": 0.6283,
+  "d_fn": 0.4756,
+  "d_cone": 0.6456,
+  "pad_fraction": 0.497,
+  "oracle_slip_speed": 0.3078
+}
