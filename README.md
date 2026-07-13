@@ -108,17 +108,57 @@ The relationship runs the wrong way. Committing to 2.5 seconds of open-loop exec
 
 `Faultline`'s F2 measured the opposite ordering on the same task at nominal mass, where n=50 was the worst setting and cost 27 points. The reversal is the point: chunk length interacts with the disturbance, and "replan more often" is not a safe default.
 
+## Result 6 — LIBERO grasps do not slip in transport
+
+Everything above measures a reflex against failures that were never slip. The check that settles it: drive the effective friction coefficient to **0.04** — a 50× reduction, a pinch on something about as slick as wet ice — on the suite whose grasps are true fingertip pinches.
+
+| arm | success | dropped | never lifted |
+|---|---|---|---|
+| policy alone | 29/40 | **1** | 10 |
+| grip ×6 @ 500 Hz | 26/40 | **0** | 14 |
+
+One drop in forty. Lowering friction stops the gripper *acquiring* the object; it does not make it lose one.
+
+Pooled across all 1,292 rollouts run for this project:
+
+| suite | rollouts | lifted then dropped |
+|---|---|---|
+| `libero_object` — pinch, friction ×0.02, impulses to 16 N | 280 | **12 (4%)** |
+| `libero_spatial` — wedge, mass to ×300 | ~800 | ~300 (38%) |
+
+The only regime producing in-transport loss is the one where a rim is wedged between the finger shafts carrying an object 200× heavier than specified, losing its *geometry* rather than sliding — a 64 N lateral tug dislodges it 4 times in 12.
+
+**LIBERO cannot host a tactile slip-reflex experiment.** Not for want of trying the right disturbance — mass, friction and a timed external wrench, two suites, two policies, 1,292 episodes — but because the carry phase is not where these grasps fail. Failures live at closure, before a stable grasp exists, which is grasp selection rather than anything a reflex can reach.
+
 ## So: is the fix a faster brain or a faster spinal cord?
 
-On this failure, neither. The hypothesis fails three independent ways, and each way is a different reason:
+On this benchmark the question cannot be asked, and finding that out took every experiment above. Four things stand in the way, and they are different in kind:
 
-1. **The window isn't the problem.** Longer open-loop chunks are better, so the policy being blind is not what loses the object (Result 5).
-2. **The signal doesn't carry the timing.** No fingertip channel separates an imminent drop from an ordinary marginal grasp above AUC 0.67, and the one detector that looked good was reporting a grasp that had already half-failed (Result 3).
-3. **When an intervention does work, sensing it is unnecessary.** A blind, timing-shuffled control matches the tactile one (Result 4).
+1. **There is no slip to react to.** Across 280 rollouts on friction grasps at 50× reduced friction, 4% of episodes lose the object in transport (Result 6).
+2. **The window isn't the problem.** Longer open-loop chunks are *better*, so the policy being blind is not what loses the object (Result 5).
+3. **The signal doesn't carry the timing.** No fingertip channel separates an imminent drop from an ordinary marginal grasp above AUC 0.67, and the detector that looked good was reporting a grasp that had already half-failed (Result 3).
+4. **When an intervention does work, neither sensing nor speed is why.** A blind timing-shuffled control matches the tactile one, and a 500 Hz loop matches a 20 Hz one (Results 4 and 5b).
 
 What is left is a claim about hardware rather than about architecture. The only intervention that helped was raising the finger servo gain, and the control that keeps everything else and removes just the boost falls straight back to baseline (6/30 vs 5/30). The limiting factor was grip force — an authority present in the actuator, absent from the action space, and impossible for any policy trained on this benchmark to request.
 
-For a reflex to be the answer, three things all have to hold: the failure must happen inside the blind window, the sensor must say *when*, and the response must be one the interface can deliver. Here none of them did. That is a more useful thing to know than a positive result on a fourth failure mode would have been, and it is the question I would now put to someone who builds grippers: **if the action interface cannot express grip force, what is a tactile sensor on that hand actually for?**
+For a reflex to be worth having, four things must hold: the failure must exist, it must happen inside the blind window, the sensor must say *when*, and the response must be one the interface can deliver. Here none of them did — and the first one failing is why the rest were never really on trial.
+
+Two questions I would now put to someone who builds hands:
+
+**If the action interface cannot express grip force, what is a tactile sensor on that hand for?** Every reflex reachable through LIBERO's action space either did nothing or stopped the robot. The only thing that worked reached past the interface entirely.
+
+**If the benchmarks we train manipulation policies on cannot drop anything, what have those policies learned about holding on?** A 5.6 g object at a friction-cone ratio of 0.08 does not require a grasp so much as a gesture.
+
+## What a fair test would need
+
+Nothing here rules the reflex hypothesis out. It rules out testing it in this simulator, which is a smaller and more actionable claim:
+
+- **A grasp that can slide.** Deformable or textured contact, not a rigid rim in a rigid wedge. MuJoCo's convex soft-contact solver is the wrong tool.
+- **Commandable grip force.** A gripper interface exposing force, not a binary open/close — which real Panda firmware has and this action space discards.
+- **Objects with plausible mass and friction**, so the safety factor sits near 1.5 rather than 65.
+- **A disturbance during transport**, since that is the only phase a carry reflex can act in.
+
+The cheapest venue meeting all four is probably real hardware with a cheap slip sensor, which is where the original brief started.
 
 ## Method notes worth stating
 

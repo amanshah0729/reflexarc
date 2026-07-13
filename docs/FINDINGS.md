@@ -496,6 +496,45 @@ A properly powered repeat is running at an effective coefficient of 0.04 with
 evidence of absence, and F3/F4/F6 above are only entitled to their conclusions
 because their effects were large or their controls were exact.
 
+### F9. LIBERO grasps do not slip in transport — **CONFIRMED, and it subsumes F3-F8**
+
+The powered repeat at an effective friction coefficient of **0.04** -- a 50x
+reduction, a pinch on a surface roughly as slick as wet ice -- moved the
+failure mode but not to slip:
+
+| arm | success | lifted_lost | never_lifted |
+|---|---|---|---|
+| policy alone | 29/40 | **1** | 10 |
+| grip x6 @ 500 Hz | 26/40 | **0** | 14 |
+
+One drop in forty. Lowering friction makes the gripper fail to *acquire* the
+object, not to keep it.
+
+Pooling every rollout run for this project, 1,292 in total:
+
+| suite | rollouts | lifted then dropped |
+|---|---|---|
+| `libero_object` — fingertip pinch, friction to x0.02, impulses to 16 N | 280 | **12 (4%)** |
+| `libero_spatial` — form-closure wedge, mass to x300 | ~800 | ~300 (38%) |
+
+The only regime that produces in-transport loss at any rate is the one where
+the grasp is a rim wedged between the finger shafts, carrying an object 200x
+heavier than the benchmark specifies, and losing its *geometry* rather than
+sliding (F7: a 64 N lateral tug dislodges it 4 times in 12).
+
+**So LIBERO cannot host a tactile slip-reflex experiment.** Not because the
+disturbance was wrong -- mass, friction and a timed external wrench were all
+tried, across two suites, two policies and 1,292 episodes -- but because the
+carry phase is not where these grasps fail. Failures live at closure, before a
+stable grasp exists, which is a grasp-selection problem rather than anything a
+reflex can reach.
+
+That is the answer to the question this project set out to ask, and it is a
+statement about the benchmark rather than about reflexes. A fair test needs a
+simulator or a robot where a held object can slide: deformable or textured
+contact, a gripper whose force is commandable, and objects with realistic mass
+and friction. None of those are properties of LIBERO.
+
 ## Methodological
 
 ### M3. Seeding from `hash()` is not reproducible across processes — **CONFIRMED, and it corrects two runs here**
@@ -529,3 +568,114 @@ That matters most for its four-model comparison, because each policy is a
 separate CLI invocation and GR00T runs in a different virtual environment
 entirely. Models compared under "identical pipeline, seeds and initial states"
 were in fact perturbed in different directions.
+
+---
+
+## Prior-art check (2026-08-10)
+
+Run after the experiments, which is the wrong order, and is the same process
+failure the sibling `Faultline` repo records twice. Recorded in full because the
+outcome changes what this project may claim.
+
+**The headline hypothesis is not novel, and at least one group reports it
+working.**
+
+### The core idea — a fast tactile reflex layered under a slow policy
+
+- [**Reactive Slip Control in Multifingered Grasping: Hybrid Tactile Sensing and
+  Internal-Force Optimization**](https://arxiv.org/abs/2602.16127) (Feb 2026) is
+  this project's hypothesis, built and reported as working: a low-level reflex
+  layer driven by fast tactile feedback for multifinger grasp stabilisation,
+  combining learned slip detection with model-based internal-force control to
+  arrest in-hand slip while preserving the object-level wrench. Slip onset
+  detected at **20.4 ± 6 ms**, grasp response ~30 ms, framed explicitly against
+  human reflex baselines — the same biological argument this repo opens with.
+- [**TactileReflex**](https://arxiv.org/abs/2605.23568) (May 2026) —
+  noise-statistics-driven vision-tactile reflex control for force-sensitive
+  manipulation.
+- [**UniTacVLA**](https://arxiv.org/abs/2606.31723) (Jun 2026) — an
+  action-tactile mixed controller supplying high-frequency closed-loop
+  corrections *on top of the low-frequency action chunks* a VLA backbone emits.
+  This project's architecture, named and published.
+- [**TouchWorld**](https://arxiv.org/abs/2607.07287) (Jul 2026), **VLA-Touch**,
+  and the [Awesome-Force-Tactile-VLA](https://github.com/OpenHelix-Team/Awesome-Force-Tactile-VLA)
+  list, which is long enough to establish a populated field rather than an
+  opening.
+
+The README cites only the faster-brain side (real-time chunking, latent
+world-model switching, interleaved correction) and needs the reflex side added.
+**"Faster brain or faster spinal cord" is an active 2026 question, not an open
+one.**
+
+### "Where the contact is, not how hard" (F2, F2a)
+
+Prior art, and older than the robotics work. In human motor control, tangential
+loading produces **partial (incipient) slip at the periphery of the contact
+patch** before gross slip, and the CNS is understood to use that signal to
+modulate grip force ([Perception of partial slips under tangential loading of
+the fingertip](https://www.nature.com/articles/s41598-018-25226-w), Sci Rep
+2018; [Dynamics of fingertip contact during the onset of tangential
+slip](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4191101/)). The
+spatial-resolution conclusion in F2 — taxel arrays over load cells — is that
+literature's standard position, reached here from a failure prediction instead.
+Per-finger reflexive tactile control also exists ([In-Hand Object Stabilization
+by Independent Finger Control](https://arxiv.org/abs/1806.05031)).
+
+F2a already retracted the mechanism, so this costs little. It does mean F2's
+sensor-design argument should be stated as *converging with* the tactile
+literature, not as an independent one.
+
+### Form closure versus force closure (F7)
+
+Textbook grasping theory (Bicchi & Kumar, *Robotic grasping and contact: a
+review*, ICRA 2000). That a wedge resists lateral load geometrically is not a
+finding. That **`libero_spatial` task 0's grasps are form closure, so the
+benchmark cannot host a slip experiment**, is not in the literature.
+
+### Not found, after searching
+
+1. **C1 — the mass argument.** "Simulators model contact poorly" is everywhere
+   (RoboLab, most sim-to-real position papers). The quantified claim — objects
+   ~200x too light, friction-cone ratio 0.08 through a nominal carry, therefore
+   no part of the score depends on holding the object and every grasp-stability
+   result on this benchmark is vacuous — was not found. Nor was the observation
+   that mass is the only perturbation axis leaving the observation untouched.
+2. **C3 — grasp geometry is policy-dependent.** ACT wedging on the finger shafts
+   where SmolVLA pinches with the pads, same task, same object, so where a
+   tactile sensor belongs depends on which policy is holding it. Not found; the
+   tactile literature assumes the fingertip.
+3. **The yoked timing-shuffled control (F4).** Every paper above reports a
+   tactile reflex improving grasping. None found runs a blind control firing the
+   same intervention the same number of times at moments drawn without
+   consulting the sensor. This is the methodological contribution, and it is what
+   turned a positive result here into a null.
+4. **F5 — the chunk-length reversal.** Longer open-loop chunks performing better
+   under a dynamics perturbation, inverting the same measurement at nominal mass
+   in `Faultline` F2. Not found.
+5. **F6 — rate is not the variable.** 500 Hz against 20 Hz buying nothing, while
+   the same loop without its force channel reproduces the baseline exactly. The
+   literature argues *for* latency; no negative control on latency was found.
+6. **F9 — the benchmark verdict itself**, at 1,292 rollouts across two suites,
+   two policies, mass, friction and impulse.
+
+### What this project is, restated
+
+Not "a fast reflex fixes chunk blindness". That is being pursued by several
+groups with better hardware, and at least one reports it working.
+
+What is defensible is **a benchmark critique with a negative result attached**:
+LIBERO cannot test grasp stability at its own object masses (C1), cannot host a
+slip experiment at any disturbance tried (F7, F9), its grasps are form closure
+whose geometry depends on the policy (C3), the only intervention that helps is a
+grip force the action space cannot express (F4, F6), and a blind control matches
+the sensed one (F4).
+
+Every reflex result here was measured on a grasp with no slip mode. They are
+correct about what they tested and are **not** evidence about tactile slip
+reflexes on friction grasps.
+
+*Cost of running this late*: the reflex arms were built and debugged before it
+was known that the task has no slip mode and that the architecture is already
+published. Searching first would have moved the project to a different simulator
+on day one, and framed it as a replication with controls rather than as an open
+question.
