@@ -55,6 +55,56 @@ information reaches proprioception -- but that is the same channel a human has.
 
 *Operating point chosen*: **x200**, where 40% of episodes are lift-then-drop.
 
+### C1a. No grasp in LIBERO is anywhere near failing — **CONFIRMED across 4 suites**
+
+C1 measured one bowl on one task. This is the general version.
+
+The metric is the **grasp safety factor**: the tangential load the contact can
+carry before sliding, over the object's weight.
+
+    S = mu (Fn_left + Fn_right) / (m g)
+
+S = 1 is the point of slipping. Grasp controllers, biological and robotic, are
+usually described as operating somewhere around 1.5-3.
+
+SmolVLA, 65 measured carries across 15 tasks in all four suites, nominal
+settings, measuring only successful carries (a failed grasp has no margin to
+report):
+
+| suite:task | object | mass | Fn total | **S** | pad share |
+|---|---|---|---|---|---|
+| 10:1 | butter | 5.2 g | 39.1 N | **1350** | 0.98 |
+| object:1 | cream cheese | 6.2 g | 37.1 N | **1017** | 0.97 |
+| object:3 | bbq sauce | 12.2 g | 33.8 N | **523** | 1.00 |
+| object:0 | alphabet soup | 25.9 g | 39.5 N | **303** | 0.99 |
+| object:2 | salad dressing | 21.8 g | 34.1 N | **290** | 0.95 |
+| goal:2 | wine bottle | 15.4 g | 15.1 N | **199** | 0.81 |
+| spatial:0-3 | akita black bowl | 5.6 g | 4.5-5.2 N | **144-178** | 0.82-1.00 |
+| goal:1, goal:3 | akita black bowl | 5.6 g | 3.7-4.8 N | **127-157** | 0.85-1.00 |
+| 10:2 | moka pot | 68.2 g | 20.9 N | **63** | 1.00 |
+
+**Median 221. Minimum 61. Not one carry in 65 falls below 3.**
+
+![grasp safety factor](figures/grasp_audit.png)
+
+Two independent causes, both worth stating. The objects are 10-100x lighter
+than the things they depict -- a wine bottle at 15 g, a moka pot at 68 g, a can
+of soup at 26 g. And the gripper closes far harder than the task needs, 34-40 N
+of normal force on `libero_object`'s boxes and cans against objects weighing
+under a fifth of a newton.
+
+*Why it matters*: a manipulation benchmark whose grasps sit two orders of
+magnitude inside the friction cone cannot score a policy on whether it holds
+on. Nothing a policy does to the grasp is measurable, so nothing in the
+reported number reflects grasp quality. It also explains F9 exactly -- there is
+no in-transport slip to detect because there is no in-transport slip.
+
+*Scope*: one policy (SmolVLA), 5 seeds per task, first four tasks of each
+suite. Pad share is policy-dependent (C3), so the force distribution would
+differ for ACT; the safety factor depends on total normal force and object
+mass, which are properties of the gripper and the scene rather than of the
+policy, and would move less.
+
 ### C2. The four failure modes must be reported separately — **method note**
 
 `success` is not a usable outcome variable here. A reflex that arrests the arm

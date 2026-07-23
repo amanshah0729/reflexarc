@@ -217,10 +217,12 @@ def main() -> None:
     ap.add_argument("--arms", default="runs/arms_m200")
     ap.add_argument("--ladder", default="runs/ladder")
     ap.add_argument("--auc", default="runs/auc.json")
+    ap.add_argument("--audit", default="runs/grasp_audit")
     ap.add_argument("--only", default="")
     args = ap.parse_args()
 
-    which = {"mass": fig_mass, "arms": fig_arms, "ladder": fig_ladder, "auc": fig_auc}
+    which = {"mass": fig_mass, "arms": fig_arms, "ladder": fig_ladder,
+             "auc": fig_auc, "audit": fig_audit}
     todo = [args.only] if args.only else list(which)
     for name in todo:
         try:
@@ -230,6 +232,54 @@ def main() -> None:
         except Exception as e:
             print(f"skip {name}: {type(e).__name__}: {e}")
 
+
+
+
+def fig_audit(args) -> None:
+    """Grasp safety factor per task, against the range a real grasp lives in."""
+    rows = [json.loads(l) for l in
+            (Path(args.audit) / "audit.jsonl").read_text().splitlines() if l.strip()]
+    keep = [r for r in rows if r.get("safety_factor")]
+    by: dict[str, list] = {}
+    for r in keep:
+        by.setdefault(f"{r['suite'].replace('libero_', '')}:{r['task']}", []).append(r)
+    if not by:
+        raise FileNotFoundError("no measurable carries in the audit")
+
+    labels = sorted(by, key=lambda k: np.median([r["safety_factor"] for r in by[k]]))
+    med = [np.median([r["safety_factor"] for r in by[k]]) for k in labels]
+    lo = [min(r["safety_factor"] for r in by[k]) for k in labels]
+    hi = [max(r["safety_factor"] for r in by[k]) for k in labels]
+    mass = [by[k][0]["mass_kg"] * 1000 for k in labels]
+    obj = [by[k][0]["object"].replace("_main", "").replace("_1", "") for k in labels]
+
+    y = np.arange(len(labels))
+    fig, ax = plt.subplots(figsize=(9.5, 0.42 * len(labels) + 2.4))
+    ax.axvspan(1.5, 3.0, color="#2f7d4f", alpha=0.16, zorder=0)
+    ax.axvline(1.0, color="#c2402d", lw=1.4, zorder=1)
+    for i, (a, b) in enumerate(zip(lo, hi)):
+        ax.plot([a, b], [i, i], color="0.72", lw=2.4, zorder=2, solid_capstyle="round")
+    ax.scatter(med, y, s=42, color="#1f4e79", zorder=3)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"{l}  ·  {o[:18]} {m:.0f} g"
+                        for l, o, m in zip(labels, obj, mass)], fontsize=8.5)
+    ax.set_xscale("log")
+    ax.set_xlim(0.8, 3000)
+    ax.set_xlabel("grasp safety factor  —  µ·Fn ⁄ weight   (1.0 = the object slips)")
+    ax.text(2.1, len(labels) - 0.4, "where a real grasp\ncontroller operates",
+            fontsize=8, color="#2f7d4f", ha="center", va="top")
+    ax.text(1.05, 0.3, "slips", fontsize=8, color="#c2402d")
+    allsf = np.array([r["safety_factor"] for r in keep])
+    ax.set_title(
+        "No grasp in LIBERO is anywhere near failing\n"
+        f"SmolVLA, {len(keep)} carries across {len(by)} tasks in 4 suites — "
+        f"median safety factor {np.median(allsf):.0f}×, minimum {allsf.min():.0f}×",
+        fontsize=11)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="x", alpha=0.25, lw=0.6)
+    ax.set_axisbelow(True)
+    save(fig, args.out, "grasp_audit.png")
 
 if __name__ == "__main__":
     main()

@@ -90,6 +90,7 @@ class Rollout:
     # immediately both read as no contact.
     obj_height: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
     obj_names: list[str] = field(default_factory=list)
+    obj_masses: list[float] = field(default_factory=list)
     reflex_steps: list[int] = field(default_factory=list)
     interrupt_steps: list[int] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
@@ -367,6 +368,14 @@ class PolicyRunner:
             mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}"
             for b in watch
         ]
+        # Subtree mass, not `body_mass`: LIBERO objects are assemblies whose
+        # root carries only part of the total, so the root's own mass
+        # understates what the gripper is actually lifting.
+        watch_masses = [
+            float(sum(model.body_mass[b] for b in range(int(model.nbody))
+                      if int(model.body_rootid[b]) == root))
+            for root in watch
+        ]
 
         actions, eefs, heights = [], [], []
         tactile = TactileTrace()
@@ -448,6 +457,7 @@ class PolicyRunner:
             impulse_step=fired_at, dropped=dropped,
             actions=np.array(actions), eef_pos=np.array(eefs), tactile=tactile,
             obj_height=np.array(heights), obj_names=watch_names,
+            obj_masses=watch_masses,
             reflex_steps=reflex_steps, interrupt_steps=interrupt_steps,
             meta={
                 "checkpoint": self.checkpoint,

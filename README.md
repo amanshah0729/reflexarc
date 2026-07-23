@@ -19,7 +19,19 @@ The literature's answer is to make cognition faster — [real-time chunking](htt
 
 This asks which one the failure actually needs, by bolting a hand-written reflex onto a frozen off-the-shelf policy and controlling for every way that could look like it worked when it didn't.
 
-## Result 1 — LIBERO cannot test grasp stability at its own object masses
+## Result 1 — no grasp in LIBERO is anywhere near failing
+
+![Grasp safety factor](docs/figures/grasp_audit.png)
+
+The **grasp safety factor** is the tangential load a contact can carry before sliding, over the object's weight: `S = µ(Fn_left + Fn_right) / mg`. At S = 1 the object slips. Grasp controllers, biological and robotic, are usually described as operating around 1.5–3.
+
+Across **65 carries in 15 tasks spanning all four LIBERO suites**, the median is **221** and the minimum is **61**. Not one carry in 65 falls below 3.
+
+Two causes stack. The objects are 10–100× lighter than the things they depict — a wine bottle at 15 g, a moka pot at 68 g, a can of soup at 26 g. And the gripper closes far harder than the task needs: 34–40 N of normal force on `libero_object`'s boxes and cans, holding objects that weigh under a fifth of a newton.
+
+A benchmark whose grasps sit two orders of magnitude inside the friction cone cannot score a policy on whether it holds on. Nothing a policy does to the grasp is measurable, so nothing in the reported number reflects grasp quality.
+
+### The same thing, as a degradation curve
 
 ![Mass ladder](docs/figures/mass_ladder.png)
 
