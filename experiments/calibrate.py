@@ -22,7 +22,7 @@ import json
 import time
 from pathlib import Path
 
-from reflexarc.disturb import Impulse, MassScale, PadFriction
+from reflexarc.disturb import GripStrength, Impulse, MassScale, PadFriction
 from reflexarc.runner import PolicyRunner
 from reflexarc.stats import wilson
 
@@ -46,7 +46,8 @@ def load_done(path: Path) -> set[str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--axis", choices=("mass", "impulse", "friction"), default="mass")
+    ap.add_argument("--axis", choices=("mass", "impulse", "friction", "grip"),
+                    default="mass")
     ap.add_argument("--values", default="1,10,25,50,75,100")
     ap.add_argument("--seeds", type=int, default=20)
     ap.add_argument("--ckpt", default="ishandotsh/act_libero_spatial_test")
@@ -90,8 +91,9 @@ def main() -> None:
             impulse = (Impulse(magnitude=value, seed=seed)
                        if args.axis == "impulse" else None)
 
+            grip = GripStrength(value if args.axis == "grip" else 1.0)
             roll = runner.run(seed=seed, impulse=impulse, mass=mass,
-                              friction=friction, arm="policy")
+                              friction=friction, grip=grip, arm="policy")
             rec = roll.summary()
             rec.update({"key": key(args.axis, value, seed),
                         "axis": args.axis, "value": value})

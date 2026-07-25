@@ -585,6 +585,61 @@ simulator or a robot where a held object can slide: deformable or textured
 contact, a gripper whose force is commandable, and objects with realistic mass
 and friction. None of those are properties of LIBERO.
 
+### F10. Every dial that weakens the grasp breaks acquisition before it breaks retention — **CONFIRMED**
+
+The obvious objection to F9 is: fine, no grasp slips at the default settings --
+so turn a dial until one does. There are three dials. All three were turned,
+and all three fail the same way.
+
+**Grip strength.** The cleanest lever, because it drives the safety factor to 1
+without touching the object, the scene, or the policy's input distribution --
+unlike mass, which reaches the slip regime only past physical realism. Scaling
+the finger servo gain, `libero_object` task 0, SmolVLA, 10 seeds:
+
+| grip x | servo kp | success | lifted_lost | never_lifted |
+|---|---|---|---|---|
+| 1 | 1000 | 9/10 | 0 | 1 |
+| 0.7 | 700 | 9/10 | 0 | 1 |
+| 0.5 | 500 | 7/10 | 2 | 1 |
+| 0.35 | 350 | 8/10 | 0 | 2 |
+| 0.25 | 250 | 8/10 | 0 | 2 |
+| **0.15** | 150 | **0/10** | 1 | **9** |
+| 0.1 | 100 | 0/10 | 2 | 8 |
+| 0.03 | 30 | 0/10 | 0 | 10 |
+| 0.01 | 10 | 0/10 | 0 | 10 |
+
+The transition is a cliff between x0.25 and x0.15: 8/10 success to 0/10, and
+the failures land almost entirely in `never_lifted`. **No setting produces more
+than 2 drops in 10.** At x0.03 the safety factor is still about 9 -- nine times
+what is needed to hold the object -- and the gripper cannot pick it up at all.
+
+That is the mechanism. **Acquiring the object needs far more force than holding
+it.** Closure has to overcome approach dynamics and settle the contact; once
+closed, geometry and a huge margin do the rest. So the two thresholds are not
+separated by a usable band -- weaken the grasp and acquisition fails first,
+every time.
+
+The other two dials do the same thing:
+
+| dial | strongest setting reached | what happened |
+|---|---|---|
+| contact friction | x0.02 (effective mu 0.04) | 1 drop in 40; never_lifted 10 -> 14 |
+| object mass | x200 (bowl at 1.12 kg) | 6 drops in 15 -- **but** on `libero_spatial`'s form-closure wedge, and past the mass of the real object |
+| grip strength | x0.15 (kp 150) | 1 drop in 10, 9 never lifted |
+
+Only the mass dial produces retention failures in quantity, and only on the
+suite where the grasp is a rim wedged between the finger shafts losing its
+geometry rather than sliding (F7: a 64 N lateral tug dislodges that 4 times in
+12). On the friction-pinch suite, where "slip" is the right word, nothing
+produces it.
+
+*This is the complete answer to the question the project set out to ask.* It is
+not that LIBERO's default settings happen to be too forgiving -- that would be
+fixable with a parameter. It is that **the parameter space contains no point
+where these policies acquire an object and then lose it**, because the gripper's
+margin for holding is far wider than its margin for grasping. A slip reflex has
+nothing to act on anywhere in the reachable configuration space.
+
 ## Methodological
 
 ### M3. Seeding from `hash()` is not reproducible across processes — **CONFIRMED, and it corrects two runs here**

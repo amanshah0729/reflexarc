@@ -34,7 +34,7 @@ from typing import Any, Protocol
 import numpy as np
 import torch
 
-from reflexarc.disturb import Impulse, MassScale, PadFriction
+from reflexarc.disturb import GripStrength, Impulse, MassScale, PadFriction
 from reflexarc.sense import FingerGeoms, TactileReading, TactileTrace, read
 
 
@@ -306,6 +306,7 @@ class PolicyRunner:
         impulse: Impulse | None = None,
         mass: MassScale | None = None,
         friction: PadFriction | None = None,
+        grip: GripStrength | None = None,
         reflex: Reflex | None = None,
         sim_reflex: Any = None,
         arm: str = "policy",
@@ -345,6 +346,9 @@ class PolicyRunner:
             fresh = self._reobserve()
             if fresh is not None:
                 obs = fresh
+        grip_kp: float | None = None
+        if grip is not None:
+            grip_kp = grip.apply(sim)
         if impulse is not None:
             impulse.reset(sim)
 
@@ -467,6 +471,8 @@ class PolicyRunner:
                 "obj_mass_max": round(max(masses.values()), 5) if masses else None,
                 "friction_factor": friction.factor if friction else 1.0,
                 "effective_friction": round(mu_eff, 4) if mu_eff is not None else None,
+                "grip_factor": grip.factor if grip else 1.0,
+                "servo_kp": round(grip_kp, 2) if grip_kp is not None else None,
                 **sim_stats,
             },
         )

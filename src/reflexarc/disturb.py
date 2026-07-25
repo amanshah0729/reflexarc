@@ -274,3 +274,56 @@ class ContactFriction:
 
 # Retained so older run scripts keep importing; the behaviour is the corrected one.
 PadFriction = ContactFriction
+
+
+@dataclass
+class GripStrength:
+    """Scale the finger servo gain for a whole episode.
+
+    The other route to a marginal grasp. The safety factor is
+    `mu Fn / mg`, so it can be driven to 1 from either end, and the two ends
+    are not equivalent:
+
+    Adding mass (`MassScale`) reaches the slip regime only *past* physical
+    realism -- a bowl has to weigh 1.1 kg before this policy drops it, heavier
+    than the object it depicts -- and it breaks acquisition as well as
+    carrying, while putting the policy far outside the dynamics it trained on.
+
+    Removing grip force leaves the object at its own mass, the scene pixel
+    identical, and the policy exactly in distribution. It is also an honest
+    failure mode: real grippers have force limits, and worn or underpowered
+    ones are a thing that happens.
+
+    Applied once after reset rather than as a reflex, so the whole episode runs
+    at one grip strength. Position actuators keep kp in `gainprm[0]` and -kp in
+    `biasprm[1]`; both move together or the servo becomes a constant-force
+    actuator instead of a stiffer or softer one.
+    """
+
+    factor: float = 1.0
+
+    @property
+    def is_control(self) -> bool:
+        return self.factor == 1.0
+
+    def describe(self) -> str:
+        return "none" if self.is_control else f"grip strength x{self.factor:g}"
+
+    def apply(self, sim) -> float:
+        """-> the servo gain actually in force, so a trial records it."""
+        import mujoco
+
+        model, _ = _unwrap(sim)
+        ids = []
+        for a in range(int(model.nu)):
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or ""
+            if "gripper" in name and "finger" in name:
+                ids.append(a)
+        if not ids:
+            raise RuntimeError("no gripper actuators found")
+        for a in ids:
+            if not self.is_control:
+                model.actuator_gainprm[a][0] *= self.factor
+                model.actuator_biasprm[a][1] *= self.factor
+                model.actuator_forcerange[a][:] *= self.factor
+        return float(model.actuator_gainprm[ids[0]][0])
