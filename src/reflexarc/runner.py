@@ -34,7 +34,8 @@ from typing import Any, Protocol
 import numpy as np
 import torch
 
-from reflexarc.disturb import GripStrength, Impulse, MassScale, PadFriction
+from reflexarc.disturb import (GripStrength, Impulse, MassScale, PadFriction,
+                               PostLiftDegrade)
 from reflexarc.sense import FingerGeoms, TactileReading, TactileTrace, read
 
 
@@ -91,6 +92,12 @@ class Rollout:
     obj_height: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
     obj_names: list[str] = field(default_factory=list)
     obj_masses: list[float] = field(default_factory=list)
+    # Breaking load: the disturbance multiplier in force when contact was lost,
+    # or the ramp maximum if it never was. `load_observed` False means the
+    # episode is right-censored -- the breaking load is known only to exceed
+    # this -- which survival analysis uses and a mean silently mishandles.
+    load_at_drop: float | None = None
+    load_observed: bool = False
     reflex_steps: list[int] = field(default_factory=list)
     interrupt_steps: list[int] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
@@ -175,6 +182,8 @@ class Rollout:
             "n_reflex": len(self.reflex_steps),
             "n_interrupt": len(self.interrupt_steps),
             "reflex_latency": self.reflex_latency,
+            "load_at_drop": self.load_at_drop,
+            "load_observed": self.load_observed,
             "max_lift_mm": round(self.max_lift * 1000, 1),
             "lost_after_lift": self.lost_after_lift,
             "outcome": self.outcome,
@@ -307,6 +316,7 @@ class PolicyRunner:
         mass: MassScale | None = None,
         friction: PadFriction | None = None,
         grip: GripStrength | None = None,
+        degrade: PostLiftDegrade | None = None,
         reflex: Reflex | None = None,
         sim_reflex: Any = None,
         arm: str = "policy",
@@ -351,6 +361,8 @@ class PolicyRunner:
             grip_kp = grip.apply(sim)
         if impulse is not None:
             impulse.reset(sim)
+        if degrade is not None:
+            degrade.reset(sim)
 
         self.policy.reset()
         if reflex is not None:
@@ -423,6 +435,12 @@ class PolicyRunner:
 
             if impulse is not None:
                 impulse.update(sim, self.fingers, step)
+            if degrade is not None:
+                degrade.update(sim, self.fingers, step)
+                if sim_reflex is not None:
+                    # Ground truth for the oracle arm: the load actually in
+                    # force. Never reaches the measurable arms.
+                    sim_reflex.oracle_load = degrade.multiplier_at(step) or 1.0
 
             actions.append(a.copy())
             eefs.append(self._eef())
@@ -454,7 +472,7 @@ class PolicyRunner:
             after = tactile.array("n_contact")[fired_at:]
             dropped = bool(np.any(after == 0)) and not success
 
-        return Rollout(
+        roll = Rollout(
             seed=seed, success=success, steps=step + 1, wall_time=time.time() - t0,
             arm=arm,
             impulse_desc=impulse.describe() if impulse else "none",
@@ -472,10 +490,45 @@ class PolicyRunner:
                 "friction_factor": friction.factor if friction else 1.0,
                 "effective_friction": round(mu_eff, 4) if mu_eff is not None else None,
                 "grip_factor": grip.factor if grip else 1.0,
+                "degrade": degrade.describe() if degrade else "none",
+                "degrade_step": degrade.started_at if degrade else None,
+                "degrade_fraction": round(degrade.fraction, 3) if degrade else None,
                 "servo_kp": round(grip_kp, 2) if grip_kp is not None else None,
                 **sim_stats,
             },
         )
+
+        if degrade is not None and degrade.mass_final != 1.0:
+            # Read off the same trace `outcome` uses, so "dropped" and "broke
+            # at load L" cannot disagree.
+            #
+            # Two distinctions this has to get right, both found in the pilot:
+            #
+            # A successful episode also ends with contact lost -- that is the
+            # policy putting the object down. Scoring that as a breaking load
+            # would record every success as a failure at whatever load the ramp
+            # happened to reach, which in the pilot read as 119x. A grasp is
+            # only *broken* if the object was lost and the task then failed.
+            #
+            # And the censoring load is the load the episode actually reached,
+            # not the ramp maximum. An episode that ended at step 145 was never
+            # tested beyond the load in force at step 145; censoring it at 400x
+            # would claim it survived a load it never saw.
+            last = roll.steps - 1
+            d = roll.drop_step
+            if roll.lift_step is None or degrade.started_at is None:
+                # Never acquired, so no grasp was ever at risk. Excluded from
+                # the survival analysis rather than censored at load 1, which
+                # would drag every arm's curve down by its acquisition rate.
+                roll.load_at_drop = None
+                roll.load_observed = False
+            elif d is not None and not success:
+                roll.load_at_drop = round(degrade.multiplier_at(d) or 1.0, 3)
+                roll.load_observed = True
+            else:
+                roll.load_at_drop = round(degrade.multiplier_at(last) or 1.0, 3)
+                roll.load_observed = False
+        return roll
 
     def close(self) -> None:
         try:

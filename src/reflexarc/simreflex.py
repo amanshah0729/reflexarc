@@ -56,6 +56,20 @@ class SimRateReflex:
     hold_substeps: int = 25
     require_contact: bool = True
     always: bool = False
+    # Evaluate once every `decimation` physics substeps. The substep is 2 ms,
+    # so 1 -> 500 Hz, 5 -> 100 Hz, 25 -> 20 Hz (the policy's own action rate),
+    # 100 -> 5 Hz, 500 -> 1 Hz. One implementation across the whole ladder, so
+    # a rate comparison varies rate and nothing else -- comparing this class at
+    # 500 Hz against `SlipReflex` at 20 Hz would confound rate with two
+    # different controllers.
+    decimation: int = 1
+    # Fire on these substeps instead of on the sensor: the timing-matched
+    # control, with a budget copied from a sensed run.
+    schedule: set[int] | None = None
+    # Fire on ground truth instead of on the fingertip signal: an upper bound
+    # on what any detector could deliver. `oracle_load` is set per step by the
+    # runner from the disturbance actually in force.
+    oracle_threshold: float | None = None
 
     # --- runtime
     _fired: int = field(default=0, init=False, repr=False)
@@ -64,14 +78,26 @@ class SimRateReflex:
     _first_at: int | None = field(default=None, init=False, repr=False)
     _hold: int = field(default=0, init=False, repr=False)
     _boosted: bool = field(default=False, init=False, repr=False)
+    oracle_load: float = field(default=0.0, init=False, repr=False)
     _ids: tuple[int, ...] = field(default_factory=tuple, init=False, repr=False)
     _base: dict = field(default_factory=dict, init=False, repr=False)
     _orig = None
     _env = None
 
+    @property
+    def hz(self) -> float:
+        return 500.0 / max(self.decimation, 1)
+
     def describe(self) -> str:
-        rate = "always" if self.always else f"{self.channel} {self.comparison} {self.threshold:g}"
-        return f"sim-rate 500Hz [{rate}] -> grip x{self.force_gain:g}"
+        if self.schedule is not None:
+            rate = "yoked"
+        elif self.oracle_threshold is not None:
+            rate = f"ORACLE load > {self.oracle_threshold:g}"
+        elif self.always:
+            rate = "always"
+        else:
+            rate = f"{self.channel} {self.comparison} {self.threshold:g}"
+        return f"{self.hz:g}Hz [{rate}] -> grip x{self.force_gain:g}"
 
     # -- statistics ---------------------------------------------------------
 
@@ -187,7 +213,21 @@ class SimRateReflex:
 
     def _substep(self, sim) -> None:
         self._substeps += 1
-        if self.always:
+        # Decimation gates evaluation, not the hold: once triggered the boost
+        # stays applied for `hold_substeps` regardless of rate, so a slow arm
+        # is slow to *notice*, not weaker when it acts.
+        if (self._substeps - 1) % max(self.decimation, 1) != 0:
+            active = self._hold > 0
+            if self._hold > 0:
+                self._hold -= 1
+                self._fired += 1
+            self._set_boost(sim, active)
+            return
+        if self.schedule is not None:
+            trig = self._substeps in self.schedule
+        elif self.oracle_threshold is not None:
+            trig = self.oracle_load >= self.oracle_threshold
+        elif self.always:
             trig = True
         else:
             reading = read(sim, self._fingers)

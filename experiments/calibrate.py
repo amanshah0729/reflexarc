@@ -22,7 +22,8 @@ import json
 import time
 from pathlib import Path
 
-from reflexarc.disturb import GripStrength, Impulse, MassScale, PadFriction
+from reflexarc.disturb import (GripStrength, Impulse, MassScale, PadFriction,
+                               PostLiftDegrade)
 from reflexarc.runner import PolicyRunner
 from reflexarc.stats import wilson
 
@@ -46,8 +47,8 @@ def load_done(path: Path) -> set[str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--axis", choices=("mass", "impulse", "friction", "grip"),
-                    default="mass")
+    ap.add_argument("--axis", choices=("mass", "impulse", "friction", "grip",
+                                      "postgrip", "postmass"), default="mass")
     ap.add_argument("--values", default="1,10,25,50,75,100")
     ap.add_argument("--seeds", type=int, default=20)
     ap.add_argument("--ckpt", default="ishandotsh/act_libero_spatial_test")
@@ -92,8 +93,14 @@ def main() -> None:
                        if args.axis == "impulse" else None)
 
             grip = GripStrength(value if args.axis == "grip" else 1.0)
+            degrade = None
+            if args.axis == "postgrip":
+                degrade = PostLiftDegrade(grip_final=value)
+            elif args.axis == "postmass":
+                degrade = PostLiftDegrade(mass_final=value)
             roll = runner.run(seed=seed, impulse=impulse, mass=mass,
-                              friction=friction, grip=grip, arm="policy")
+                              friction=friction, grip=grip, degrade=degrade,
+                              arm="policy")
             rec = roll.summary()
             rec.update({"key": key(args.axis, value, seed),
                         "axis": args.axis, "value": value})

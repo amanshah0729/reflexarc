@@ -327,3 +327,136 @@ class GripStrength:
                 model.actuator_biasprm[a][1] *= self.factor
                 model.actuator_forcerange[a][:] *= self.factor
         return float(model.actuator_gainprm[ids[0]][0])
+
+
+@dataclass
+class PostLiftDegrade:
+    """Weaken the grasp *after* the object is in the hand.
+
+    Every other perturbation in this module is set at reset, which is why F10
+    found acquisition always failing before retention: making an object hard to
+    pick up is not the same as making it hard to hold, and setting the
+    difficulty beforehand only ever tests the first one.
+
+    The slip-detection literature does not do that. It grasps the object
+    normally and *then* changes the load -- pouring rice into a held container
+    for a gradual ramp, hanging weight off it, or letting a cup fill. The two
+    thresholds are separated in time rather than in magnitude.
+
+    This is that protocol. The grasp is acquired at full strength; once the
+    object is clear of the table, the finger servo fades and/or the object
+    gains mass, over `ramp_steps` control steps. `grip_final` of 0.1 means the
+    hand ends at a tenth of the gain it grabbed with.
+
+    Ramping rather than stepping is deliberate and comes from the same source:
+    a sudden load change reads as an impact and triggers spurious slip
+    detections, which is exactly why rice is poured rather than a weight
+    dropped.
+    """
+
+    grip_final: float = 1.0     # multiplier on servo gain at the end of the ramp
+    mass_final: float = 1.0     # multiplier on object mass at the end of the ramp
+    lift_m: float = 0.02        # how far the object must rise before the ramp starts
+    delay_steps: int = 3
+    ramp_steps: int = 30        # 30 steps = 1.5 s at 20 Hz
+
+    _armed_at: int | None = field(default=None, init=False, repr=False)
+    _started: int | None = field(default=None, init=False, repr=False)
+    _rest: dict[int, float] = field(default_factory=dict, init=False, repr=False)
+    _ids: tuple[int, ...] = field(default_factory=tuple, init=False, repr=False)
+    _kp0: dict[int, tuple] = field(default_factory=dict, init=False, repr=False)
+    _m0: dict[int, float] = field(default_factory=dict, init=False, repr=False)
+    _frac: float = field(default=0.0, init=False, repr=False)
+
+    @property
+    def is_control(self) -> bool:
+        return self.grip_final == 1.0 and self.mass_final == 1.0
+
+    @property
+    def started_at(self) -> int | None:
+        return self._started
+
+    @property
+    def fraction(self) -> float:
+        """How far through the ramp this episode got, 0 to 1."""
+        return self._frac
+
+    def multiplier_at(self, step: int | None) -> float | None:
+        """The load multiplier in force at `step`, or None before the ramp.
+
+        This is what makes the outcome continuous. Asking "at load L, did it
+        drop?" spends a rollout on one bit and needs L calibrated into a narrow
+        band; asking "what was the load when it dropped?" spends the same
+        rollout on a number and needs no calibration, because each episode
+        sweeps the range.
+        """
+        if step is None or self._started is None or self.mass_final == 1.0:
+            return None
+        f = min(1.0, max(0.0, (step - self._started) / max(self.ramp_steps, 1)))
+        return 1.0 + f * (self.mass_final - 1.0)
+
+    def describe(self) -> str:
+        if self.is_control:
+            return "none"
+        bits = []
+        if self.grip_final != 1.0:
+            bits.append(f"grip->x{self.grip_final:g}")
+        if self.mass_final != 1.0:
+            bits.append(f"mass->x{self.mass_final:g}")
+        return f"post-lift {'+'.join(bits)} over {self.ramp_steps * 50}ms"
+
+    def reset(self, sim) -> None:
+        import mujoco
+
+        model, data = _unwrap(sim)
+        self._armed_at = self._started = None
+        self._frac = 0.0
+        self._rest = {b: float(data.xpos[b][2]) for b in range(int(model.nbody))}
+        ids = []
+        for a in range(int(model.nu)):
+            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or ""
+            if "gripper" in name and "finger" in name:
+                ids.append(a)
+        self._ids = tuple(ids)
+        self._kp0 = {a: (float(model.actuator_gainprm[a][0]),
+                         float(model.actuator_biasprm[a][1]),
+                         np.array(model.actuator_forcerange[a], copy=True))
+                     for a in ids}
+        self._m0 = {b: float(model.body_mass[b]) for b in range(int(model.nbody))}
+
+    def update(self, sim, fingers: FingerGeoms, step: int) -> None:
+        if self.is_control:
+            return
+        model, data = _unwrap(sim)
+
+        if self._started is None:
+            bid = grasped_body(sim, fingers)
+            if bid < 0:
+                self._armed_at = None
+                return
+            if float(data.xpos[bid][2]) - self._rest.get(bid, 0.0) < self.lift_m:
+                self._armed_at = None
+                return
+            if self._armed_at is None:
+                self._armed_at = step
+                return
+            if step - self._armed_at < self.delay_steps:
+                return
+            self._started = step
+
+        f = min(1.0, (step - self._started) / max(self.ramp_steps, 1))
+        self._frac = f
+
+        if self.grip_final != 1.0:
+            k = 1.0 + f * (self.grip_final - 1.0)
+            for a in self._ids:
+                kp, bias, frange = self._kp0[a]
+                model.actuator_gainprm[a][0] = kp * k
+                model.actuator_biasprm[a][1] = bias * k
+                model.actuator_forcerange[a][:] = frange * k
+        if self.mass_final != 1.0:
+            k = 1.0 + f * (self.mass_final - 1.0)
+            for root in free_bodies(sim):
+                for b in range(int(model.nbody)):
+                    if int(model.body_rootid[b]) == root:
+                        model.body_mass[b] = self._m0[b] * k

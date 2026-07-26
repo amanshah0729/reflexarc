@@ -116,3 +116,48 @@ literature describes as adequate for normal force and sparse for shear, with
 slip and rotation the specific operations rigid simulators handle badly. This
 design answers where a fast loop belongs in the control stack. It does not
 produce a quantitative claim about real slip.
+
+---
+
+## Amendment 1 — the outcome definition, before any arm was run
+
+Found in a 3-seed pilot of the `policy` and `reflex@500Hz` arms, and fixed
+before the registered experiment started. No analysis had been run.
+
+The registered outcome was "the mass multiplier in force at the step the
+gripper loses contact". Two things were wrong with it.
+
+**A successful episode also ends with contact lost** — that is the policy
+placing the object. The pilot recorded seeds 0 and 1 as *successes* with
+breaking loads of 119 and 118, which is the load that happened to be in force
+when the robot put the object down, not a load that broke anything. A grasp
+counts as broken only if the object was lost **and the task then failed**.
+
+**The censoring load is the load actually reached**, not the ramp maximum. An
+episode that finished at step 145 was never tested past the load in force at
+step 145; censoring it at x400 asserts it survived a load it never experienced,
+which biases every arm upward by however early it finishes.
+
+Also, episodes that never lift the object are now **excluded** rather than
+censored at load 1. No grasp was ever at risk in them, and censoring them at
+the bottom of the range would pull each arm's curve down by its acquisition
+rate — a quantity this experiment is specifically designed not to measure.
+
+Predictions and the analysis plan are unchanged.
+
+## Amendment 2 — ramp rate, chosen from a policy-only pilot
+
+The registered ramp (x400 over 250 control steps) was too slow to measure
+anything: in a 5-seed `policy`-only pilot the task finished before the load
+mattered, giving 4 successes censored between x119 and x177 and **zero**
+observed breaks. A curve with no events cannot be compared to anything.
+
+At 100 steps every episode is driven to failure and breaks at a spread of loads
+— x224, x312, x328, x376 — which is what a load-to-failure test is supposed to
+produce. The specimen breaking is not the finding; where it breaks is.
+
+Ramp is therefore x400 over **100** control steps (5 s). Chosen on the `policy`
+arm alone, before any reflex arm was run, and it sets the measurement range
+rather than favouring any arm: every arm sees the identical ramp.
+
+Predictions and the analysis plan remain unchanged.

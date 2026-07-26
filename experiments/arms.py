@@ -23,7 +23,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from reflexarc.disturb import ContactFriction, Impulse, MassScale
+from reflexarc.disturb import (ContactFriction, Impulse, MassScale,
+                               PostLiftDegrade)
 from reflexarc.reflex import ScheduledReflex, SlipReflex, SqueezeReflex, yoke
 from reflexarc.runner import PolicyRunner
 from reflexarc.simreflex import SimRateReflex
@@ -48,6 +49,9 @@ def main() -> None:
     ap.add_argument("--task", type=int, default=0)
     ap.add_argument("--mass", type=float, default=200.0)
     ap.add_argument("--friction", type=float, default=1.0)
+    ap.add_argument("--post-mass", type=float, default=1.0,
+                    help="ramp object mass to this multiple after the lift")
+    ap.add_argument("--post-grip", type=float, default=1.0)
     ap.add_argument("--impulse", type=float, default=0.0)
     ap.add_argument("--seeds", type=int, default=30)
     ap.add_argument("--n-action-steps", type=int, default=20)
@@ -151,6 +155,8 @@ def main() -> None:
                     seed=seed, arm=arm, reflex=reflex, sim_reflex=sim_reflex,
                     mass=MassScale(args.mass),
                     friction=ContactFriction(args.friction),
+                    degrade=PostLiftDegrade(grip_final=args.post_grip,
+                                            mass_final=args.post_mass),
                     impulse=Impulse(magnitude=args.impulse, seed=seed)
                     if args.impulse else None,
                 )
@@ -161,8 +167,9 @@ def main() -> None:
                                    else "none")
                 with manifest.open("a") as f:
                     f.write(json.dumps(rec) + "\n")
+                nfire = len(roll.reflex_steps) or roll.meta.get("sim_triggers", 0)
                 print(f"  {arm:>10} seed={seed:<3d} {roll.outcome:15s} "
-                      f"fired={len(roll.reflex_steps):<3d} steps={roll.steps:3d} "
+                      f"fired={nfire:<3d} steps={roll.steps:3d} "
                       f"({roll.wall_time:.1f}s)", flush=True)
     finally:
         runner.close()
@@ -206,7 +213,7 @@ def report(manifest: Path) -> None:
         n = len(rs)
         c = Counter(r["outcome"] for r in rs)
         p, lo, hi = wilson(c["success"], n)
-        fired = sum(r["n_reflex"] for r in rs) / n
+        fired = sum(r["n_reflex"] or r.get("sim_triggers", 0) for r in rs) / n
         print(f"{arm:>10} {n:>4} {c['success']:>3}/{n:<3} [{lo:.2f},{hi:.2f}] "
               f"{c['lifted_lost']:>12} {c['never_lifted']:>13} "
               f"{c['carried_missed']:>7} {fired:>7.1f}")
