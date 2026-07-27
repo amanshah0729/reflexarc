@@ -218,11 +218,13 @@ def main() -> None:
     ap.add_argument("--ladder", default="runs/ladder")
     ap.add_argument("--auc", default="runs/auc.json")
     ap.add_argument("--audit", default="runs/grasp_audit")
+    ap.add_argument("--breaking", default="runs/breaking_load")
     ap.add_argument("--only", default="")
     args = ap.parse_args()
 
     which = {"mass": fig_mass, "arms": fig_arms, "ladder": fig_ladder,
-             "auc": fig_auc, "audit": fig_audit}
+             "auc": fig_auc, "audit": fig_audit,
+             "breaking": fig_breaking}
     todo = [args.only] if args.only else list(which)
     for name in todo:
         try:
@@ -280,6 +282,60 @@ def fig_audit(args) -> None:
     ax.grid(axis="x", alpha=0.25, lw=0.6)
     ax.set_axisbelow(True)
     save(fig, args.out, "grasp_audit.png")
+
+
+
+def fig_breaking(args) -> None:
+    """The headline: breaking load against reflex rate, with both controls."""
+    import collections
+
+    rows = [json.loads(l) for l in
+            (Path(args.breaking) / "trials.jsonl").read_text().splitlines() if l.strip()]
+    by = collections.defaultdict(list)
+    for r in rows:
+        if r.get("load_at_drop") is not None:
+            by[r["arm"]].append(r["load_at_drop"])
+
+    ladder = [("reflex@1Hz", 1), ("reflex@5Hz", 5), ("reflex@20Hz", 20),
+              ("reflex@100Hz", 100), ("reflex@500Hz", 500)]
+    ladder = [(a, hz) for a, hz in ladder if a in by]
+    med = lambda v: float(np.median(v))
+
+    fig, ax = plt.subplots(figsize=(8.6, 4.8))
+    base = med(by["policy"])
+    ax.axhline(base, color="#333333", lw=1.6, ls="--", zorder=2)
+    ax.text(1.05, base + 6, "policy alone, no reflex", fontsize=9, color="#333333")
+
+    if "yoked" in by:
+        y = med(by["yoked"])
+        ax.axhline(y, color="#c2402d", lw=1.5, ls=":", zorder=2)
+        ax.text(1.05, y + 5, "same squeezes, random times", fontsize=9,
+                color="#c2402d")
+
+    xs = [hz for _, hz in ladder]
+    ys = [med(by[a]) for a, _ in ladder]
+    for (a, hz) in ladder:
+        v = by[a]
+        ax.plot([hz, hz], [np.percentile(v, 25), np.percentile(v, 75)],
+                color="#9fb8cc", lw=6, solid_capstyle="round", zorder=3)
+    ax.plot(xs, ys, "-o", color="#1f4e79", lw=2.2, ms=9, zorder=4,
+            label="tactile reflex")
+
+    ax.set_xscale("log")
+    ax.set_xticks(xs)
+    ax.set_xticklabels([f"{hz}" for hz in xs])
+    ax.set_xlabel("reflex rate (Hz)   —   the policy acts at 20 Hz")
+    ax.set_ylabel("breaking load  (x object mass)")
+    ax.axvspan(20, 100, color="#2f7d4f", alpha=0.08, zorder=0)
+    ax.text(45, max(ys) + 4, "the knee", fontsize=9, color="#2f7d4f", ha="center")
+    ax.set_title(
+        "A reflex has to be faster than the policy to be worth anything\n"
+        "load-to-failure, libero_object task 0, SmolVLA, 14 seeds/arm; "
+        "bars are the interquartile range", fontsize=11)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.22, lw=0.6)
+    ax.set_axisbelow(True)
+    save(fig, args.out, "breaking_load.png")
 
 if __name__ == "__main__":
     main()

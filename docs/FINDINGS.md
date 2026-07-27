@@ -640,6 +640,74 @@ where these policies acquire an object and then lose it**, because the gripper's
 margin for holding is far wider than its margin for grasping. A slip reflex has
 nothing to act on anywhere in the reachable configuration space.
 
+### F11. A tactile grip reflex does work — above 100 Hz, and only when the sensor drives it — **CONFIRMED (pre-registered)**
+
+The first positive result in this project, from the first design capable of
+showing one. Pre-registered in `docs/PREREGISTRATION.md`, committed before the
+run, with two amendments both recorded from policy-only pilots.
+
+Load-to-failure: the grasp is acquired normally, then the object's mass ramps
+x1 to x400 over 100 control steps. The outcome is the **load at which the grasp
+broke**, one continuous number per rollout, not a bit. `libero_object` task 0,
+SmolVLA, 15 seeds per arm, 14 usable (one seed never lifts, in every arm).
+
+| arm | median breaking load | activations/ep | log-rank vs policy (Holm) |
+|---|---|---|---|
+| policy | 312 | 0 | — |
+| reflex @ 1 Hz | 300 | 1 | 1.000 |
+| reflex @ 5 Hz | 316 | 7 | 1.000 |
+| reflex @ 20 Hz | 320 | 18 | 1.000 |
+| **reflex @ 100 Hz** | **392** | 55 | **0.0064** |
+| **reflex @ 500 Hz** | **376** | 70 | **0.0298** |
+| oracle (true load) | 372 | 1 | **0.0428** |
+| **yoked** (same budget, blind timing) | **288** | 56 | 1.000 |
+
+Paired by seed, which is the comparison that shows it is not carried by a few
+episodes:
+
+| arm | beats policy on | median delta |
+|---|---|---|
+| reflex @ 100 Hz | **11 / 14 seeds** | **+82** |
+| reflex @ 500 Hz | **12 / 14 seeds** | **+64** |
+| yoked | 7 / 14 seeds | +0 |
+
+**Three claims, and the third is the one that matters.**
+
+*Rate matters, with a knee between 20 and 100 Hz.* At the policy's own action
+rate of 20 Hz the reflex is indistinguishable from no reflex (320 against 312).
+At 100 Hz it holds 25% more load. A fast loop below the policy has to run
+faster than the policy's action rate to be worth anything; running *at* that
+rate is equivalent to not having one.
+
+*The sensing matters.* `yoked` applies the same intervention with a matched
+activation budget (56 against 55) at times drawn without the sensor, and lands
+at 288 — at or below baseline, better than policy on exactly half the seeds.
+Sensed-versus-yoked is p = 0.0102. **When you squeeze is the whole effect.**
+
+*And the fingertip signal is as good as ground truth.* The oracle, firing on
+the true load, reaches 372 against the tactile detector's 392. The detector is
+not the bottleneck.
+
+**This directly overturns F6**, which reported that a 25x faster reflex buys
+nothing. F6 was measured on a binary outcome at a single fixed load, under a
+mass set at reset. That design cannot see a 25% shift in breaking load, and its
+disturbance had no onset for a detector to find. The earlier reading was not
+wrong about its own data; the data could not answer the question.
+
+*Scope, and it is narrow.* One task, one policy, n=14. Task success is 0/14 in
+every arm -- the ramp is harsh by design, so this measures grasp retention and
+says nothing about task completion. Six of fourteen episodes in the 100 Hz arm
+break at exactly the ramp ceiling, so the true effect is bounded below by what
+is reported here. And it remains MuJoCo's penetration-based contact, which the
+tactile-sim literature describes as sparse in shear -- the architectural claim
+travels, the number does not.
+
+*Predictions 1 and 2 were both wrong*, which is the reason the pre-registration
+was worth writing. I predicted breaking load would be flat in rate above 20 Hz
+(it is not -- the knee is above 20 Hz) and that yoked would match the sensed
+arms (it does not -- the sensing is the effect). Predictions 3 and 4 were right
+and half-right: the sensed arms beat policy, and the oracle does not beat them.
+
 ## Methodological
 
 ### M3. Seeding from `hash()` is not reproducible across processes — **CONFIRMED, and it corrects two runs here**
