@@ -708,6 +708,85 @@ was worth writing. I predicted breaking load would be flat in rate above 20 Hz
 arms (it does not -- the sensing is the effect). Predictions 3 and 4 were right
 and half-right: the sensed arms beat policy, and the oracle does not beat them.
 
+### F12. The rate the reflex needs is not set by the policy — **CORRECTS F11**
+
+F11 reported a knee between 20 and 100 Hz and attributed it to the policy's
+action rate: "a reflex has to run faster than the policy to be worth anything".
+That attribution was never tested, and it does not survive testing.
+
+The suspicion came from the numbers themselves. The disturbance ramps over 5
+seconds. A 20 Hz loop should track a 5-second ramp trivially, so the failure of
+the 20 Hz arm cannot be about keeping up with the disturbance -- and there was
+no reason beyond coincidence to think it was about the policy either.
+
+Three candidates, varied independently, same ladder each time:
+
+| condition | policy | 20 Hz | 100 Hz | 500 Hz | knee |
+|---|---|---|---|---|---|
+| baseline (replan 1 Hz, ramp 100) | 312 | 320 | **392** | **376** | 20-100 Hz |
+| disturbance **2x faster** (ramp 50) | 328 | 344 | **400** | **400** | 20-100 Hz |
+| policy replans **4x more often** (n=5) | 304 | 332 | 372 | 400 | 20-100 Hz |
+
+**The knee does not move.** Doubling the disturbance rate should have pushed the
+requirement to ~200 Hz and broken the 100 Hz arm; it did not. Quadrupling the
+policy's replan rate should have pushed it to ~400 Hz and broken the 100 Hz arm;
+it did not. In all three the same thing happens at the same place: 20 Hz is
+worth nothing, 100 Hz works.
+
+That is consistent with the required rate being a property of **the contact**,
+and inconsistent with it being a property of the policy. F11's headline is
+therefore wrong as written and is corrected here.
+
+*The corrected claim is stronger than the one it replaces.* If the rate were set
+by the policy, a faster policy would eventually remove the need for a reflex. If
+it is set by the contact, no amount of policy engineering substitutes for a fast
+loop -- the requirement is in the physics, and it is the same requirement
+whatever sits above it.
+
+*Two conditions were run and are not usable, reported rather than dropped.*
+Halving the disturbance rate (ramp 200) returns to the regime where the task
+finishes before the load bites: 8-10 of 13 episodes succeed and only 3-5
+produce an event, so every arm is mostly censored and nothing is resolvable.
+Slowing the policy to `n_action_steps=50` degrades the policy's own competence
+-- `Faultline` F2 measures that setting costing 27 points -- so only 7-8 of 14
+episodes yield a graspable rollout and breaking loads scatter from 53 to 300.
+Neither is a null; both are underpowered by construction.
+
+*Caveats.* The levers were modest: 2x on the disturbance, 4x on the policy. A
+wider range would be more convincing, and `n_action_steps=1` was attempted
+first and abandoned at roughly 3 minutes per rollout. The `policy_fast`
+condition's reflex arms do not survive Holm correction on their own (0.094 and
+0.062 at n=13); they replicate the baseline's direction and size rather than
+standing alone.
+
+### F13. Whether the reflex predicts slip or arrests it — **INCONCLUSIVE**
+
+The mechanism matters for hardware. Prediction -- firing before the object
+moves -- needs a sensor that resolves incipient slip. Arrest -- catching a
+slide already underway -- needs only a fast loop and a crude signal.
+
+Measured against ground truth (the object's true speed relative to the hand,
+thresholded per episode against that carry's own noise floor), the reflex fires
+before sliding starts in 10 of 13 episodes, median lead +6 control steps
+(+300 ms). Read naively that says prediction.
+
+**It should not be read naively.** The 100 Hz detector fires about 55 times per
+episode and is active for roughly 40-50% of the carry. A detector that is on
+half the time has its *first* firing precede almost any event by construction,
+which is exactly the artifact that produced F1's 950 ms of spurious "warning"
+and F2a's phantom slip precursor. The same mistake twice is a pattern; three
+times would be a habit.
+
+What this needs is a null: the same statistic computed for firings placed at
+random with the detector's own duty cycle. If the measured lead does not beat
+that, there is no prediction here. Until that is run, the mechanism is
+undetermined.
+
+The one number worth keeping from this run is the reaction window itself.
+Without a reflex, sliding begins a median of **25 control steps (1250 ms)**
+before the object is lost, IQR 8-48 steps. That is the entire budget any reflex
+has to work in, and it is measured rather than assumed.
+
 ## Methodological
 
 ### M3. Seeding from `hash()` is not reproducible across processes — **CONFIRMED, and it corrects two runs here**

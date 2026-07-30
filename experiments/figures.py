@@ -324,12 +324,12 @@ def fig_breaking(args) -> None:
     ax.set_xscale("log")
     ax.set_xticks(xs)
     ax.set_xticklabels([f"{hz}" for hz in xs])
-    ax.set_xlabel("reflex rate (Hz)   —   the policy acts at 20 Hz")
+    ax.set_xlabel("reflex rate (Hz)   —   knee unmoved by 4x policy rate or 2x disturbance rate")
     ax.set_ylabel("breaking load  (x object mass)")
     ax.axvspan(20, 100, color="#2f7d4f", alpha=0.08, zorder=0)
     ax.text(45, max(ys) + 4, "the knee", fontsize=9, color="#2f7d4f", ha="center")
     ax.set_title(
-        "A reflex has to be faster than the policy to be worth anything\n"
+        "A grip reflex needs ~100 Hz — and the requirement is not about the policy\n"
         "load-to-failure, libero_object task 0, SmolVLA, 14 seeds/arm; "
         "bars are the interquartile range", fontsize=11)
     ax.spines[["top", "right"]].set_visible(False)

@@ -142,6 +142,31 @@ The only regime producing in-transport loss is the one where a rim is wedged bet
 
 **LIBERO cannot host a tactile slip-reflex experiment.** Not for want of trying the right disturbance — mass, friction and a timed external wrench, two suites, two policies, 1,292 episodes — but because the carry phase is not where these grasps fail. Failures live at closure, before a stable grasp exists, which is grasp selection rather than anything a reflex can reach.
 
+## Result 7 — the reflex does work, and the rate it needs is set by the contact
+
+![Breaking load vs reflex rate](docs/figures/breaking_load.png)
+
+Every result above measured a bit per rollout — at a fixed load, did it drop — which needs the load tuned into a narrow band and, at n=25, can only see a swing of about twenty points. This ramps the load instead and records **where the grasp broke**: a continuous number per rollout, no calibration, and episodes that never break are censored rather than discarded. Pre-registered in [docs/PREREGISTRATION.md](docs/PREREGISTRATION.md), with two amendments logged from policy-only pilots.
+
+| arm | median breaking load | p (Holm) |
+|---|---|---|
+| policy alone | 312 | — |
+| reflex @ 1 Hz | 300 | 1.000 |
+| reflex @ 5 Hz | 316 | 1.000 |
+| reflex @ 20 Hz | 320 | 1.000 |
+| **reflex @ 100 Hz** | **392** | **0.0064** |
+| **reflex @ 500 Hz** | **376** | **0.0298** |
+| oracle (true load) | 372 | 0.0428 |
+| **yoked** (same budget, blind timing) | **288** | 1.000 |
+
+Paired by seed, 100 Hz beats the policy on **11 of 14 seeds** (median +82) and the yoked arm on 7 of 14 (median +0).
+
+Three things follow. A grip reflex is worth roughly **25% more load**. It needs about **100 Hz** — at 20 Hz it is worth nothing. And the **timing is the entire effect**: the yoked arm squeezes the same number of times for the same duration at moments drawn without the sensor, and lands at or below baseline.
+
+**But the rate requirement is not about the policy.** That was this project's first reading and it was wrong. Varying the two candidate drivers independently, the knee does not move: doubling the disturbance rate should have pushed it to ~200 Hz, quadrupling the policy's replan rate should have pushed it to ~400 Hz, and in both the same thing happens in the same place — 20 Hz worthless, 100 Hz works ([F12](docs/FINDINGS.md)).
+
+That reads as a property of the contact rather than of the control stack, and it is the stronger version of the claim: if the rate were set by the policy, a fast enough policy would remove the need for a reflex. If it is set by the physics, nothing above it substitutes for a fast loop.
+
 ## So: is the fix a faster brain or a faster spinal cord?
 
 On this benchmark the question cannot be asked, and finding that out took every experiment above. Four things stand in the way, and they are different in kind:
