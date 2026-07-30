@@ -83,6 +83,8 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=15)
     ap.add_argument("--mass-final", type=float, default=400.0)
     ap.add_argument("--ramp-steps", type=int, default=250)
+    ap.add_argument("--n-action-steps", type=int, default=20,
+                    help="policy replan interval; 20 steps = 1 s at 20 Hz")
     ap.add_argument("--channel", default="cone_ratio")
     ap.add_argument("--threshold", type=float, default=0.9)
     ap.add_argument("--comparison", default="gt")
@@ -112,7 +114,8 @@ def main() -> None:
                 done.add((r["arm"], r["seed"]))
 
     runner = PolicyRunner(checkpoint=args.ckpt, suite=args.suite,
-                          task_id=args.task, max_steps=400)
+                          task_id=args.task, max_steps=400,
+                          n_action_steps=args.n_action_steps)
     try:
         for arm in arms:
             for seed in range(args.seeds):
