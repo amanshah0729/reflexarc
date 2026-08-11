@@ -34,8 +34,8 @@ from typing import Any, Protocol
 import numpy as np
 import torch
 
-from reflexarc.disturb import (GripStrength, Impulse, MassScale, PadFriction,
-                               PostLiftDegrade)
+from reflexarc.disturb import (ContactTimescale, GripStrength, Impulse,
+                               MassScale, PadFriction, PostLiftDegrade)
 from reflexarc.sense import FingerGeoms, TactileReading, TactileTrace, read
 
 
@@ -316,6 +316,7 @@ class PolicyRunner:
         mass: MassScale | None = None,
         friction: PadFriction | None = None,
         grip: GripStrength | None = None,
+        contact: ContactTimescale | None = None,
         degrade: PostLiftDegrade | None = None,
         reflex: Reflex | None = None,
         sim_reflex: Any = None,
@@ -356,6 +357,10 @@ class PolicyRunner:
             fresh = self._reobserve()
             if fresh is not None:
                 obs = fresh
+        solref0: float | None = None
+        if contact is not None:
+            solref0 = contact.apply(sim, self.fingers)
+            mutated = mutated or not contact.is_control
         grip_kp: float | None = None
         if grip is not None:
             grip_kp = grip.apply(sim)
@@ -490,6 +495,8 @@ class PolicyRunner:
                 "friction_factor": friction.factor if friction else 1.0,
                 "effective_friction": round(mu_eff, 4) if mu_eff is not None else None,
                 "grip_factor": grip.factor if grip else 1.0,
+                "contact_factor": contact.factor if contact else 1.0,
+                "solref_timeconst": solref0,
                 "degrade": degrade.describe() if degrade else "none",
                 "degrade_step": degrade.started_at if degrade else None,
                 "degrade_fraction": round(degrade.fraction, 3) if degrade else None,

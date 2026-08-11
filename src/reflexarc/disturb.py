@@ -460,3 +460,53 @@ class PostLiftDegrade:
                 for b in range(int(model.nbody)):
                     if int(model.body_rootid[b]) == root:
                         model.body_mass[b] = self._m0[b] * k
+
+
+@dataclass
+class ContactTimescale:
+    """Scale the contact solver's time constant -- how fast contact responds.
+
+    F12 concluded that the reflex's required rate is set by the contact rather
+    than by the policy or the disturbance, but it concluded that by
+    *elimination*: the knee did not move when either of the other two was
+    varied, so it must be the third. That is an inference from two negatives.
+
+    This is the positive test. MuJoCo's `solref = [timeconst, dampratio]` sets
+    the timescale on which a contact constraint responds; the default
+    timeconst is 0.02 s, which is 50 Hz -- squarely inside the observed
+    20-100 Hz knee, which is either a coincidence or the mechanism.
+
+    If the knee tracks this parameter, the claim is demonstrated. If it does
+    not move, something else sets it and F12's attribution is wrong in a way
+    nothing so far has detected.
+
+    Applied to the finger and free-object geoms together, so the pair-mixing
+    rule cannot matter: both sides carry the same value.
+
+    MuJoCo requires timeconst >= 2 * timestep for stability. At LIBERO's 2 ms
+    step that is 0.004 s, so factors below ~0.2 are not usable.
+    """
+
+    factor: float = 1.0
+
+    @property
+    def is_control(self) -> bool:
+        return self.factor == 1.0
+
+    def describe(self) -> str:
+        return "none" if self.is_control else f"contact timeconst x{self.factor:g}"
+
+    def apply(self, sim, fingers: FingerGeoms) -> float:
+        model, _ = _unwrap(sim)
+        roots = set(free_bodies(sim))
+        targets = list(fingers.all) + [
+            g for g in range(int(model.ngeom))
+            if int(model.body_rootid[model.geom_bodyid[g]]) in roots
+        ]
+        for g in targets:
+            if not self.is_control:
+                model.geom_solref[g][0] *= self.factor
+            # Stability floor: below 2 * timestep the solver goes unstable, and
+            # an unstable contact is a different experiment, not a faster one.
+            model.geom_solref[g][0] = max(float(model.geom_solref[g][0]), 0.004)
+        return float(model.geom_solref[targets[0]][0])

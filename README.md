@@ -165,7 +165,19 @@ Three things follow. A grip reflex is worth roughly **25% more load**. It needs 
 
 **But the rate requirement is not about the policy.** That was this project's first reading and it was wrong. Varying the two candidate drivers independently, the knee does not move: doubling the disturbance rate should have pushed it to ~200 Hz, quadrupling the policy's replan rate should have pushed it to ~400 Hz, and in both the same thing happens in the same place — 20 Hz worthless, 100 Hz works ([F12](docs/FINDINGS.md)).
 
-That reads as a property of the contact rather than of the control stack, and it is the stronger version of the claim: if the rate were set by the policy, a fast enough policy would remove the need for a reflex. If it is set by the physics, nothing above it substitutes for a fast loop.
+That was elimination, not demonstration — so I ran the positive test: scale MuJoCo's contact time constant and see whether the knee follows. It does, across a 16× range ([F14](docs/FINDINGS.md)):
+
+| contact time constant | policy | 20 Hz | 100 Hz | 500 Hz |
+|---|---|---|---|---|
+| 5 ms | 256 | 260 | 356 *(n.s.)* | 376 *(n.s.)* |
+| 20 ms (default) | 312 | 320 | **392** | **376** |
+| 80 ms | 280 | **376** | **384** | **400** |
+
+At 80 ms the 20 Hz reflex works, and 20 Hz had been worthless in every other condition in this project. The rule is roughly **reflex rate ≈ 1 / contact time constant** — sample at least as fast as the contact responds.
+
+That also disposes of the confound the ladder carries, since a slower arm necessarily fires less often. At 20 Hz the reflex triggers a median of 17 times at the default contact and 16 at the slow one, scoring 320 against 376: same budget, opposite outcome, only the contact differs.
+
+So the architectural claim stands and is now mechanistic: **the required rate is a property of the physics, and no amount of policy speed substitutes for a fast loop.** The *number* is not transferable — 100 Hz belongs to MuJoCo's default contact for this geom pair, and on hardware the time constant is a property of pad material and object that would have to be measured.
 
 ## So: is the fix a faster brain or a faster spinal cord?
 

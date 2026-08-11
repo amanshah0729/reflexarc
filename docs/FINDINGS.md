@@ -787,6 +787,59 @@ Without a reflex, sliding begins a median of **25 control steps (1250 ms)**
 before the object is lost, IQR 8-48 steps. That is the entire budget any reflex
 has to work in, and it is measured rather than assumed.
 
+### F14. The required reflex rate is set by the contact time constant — **CONFIRMED (positive test)**
+
+F12 concluded this by elimination: the knee moved with neither the policy's
+replan rate nor the disturbance rate, so it had to be the third thing. Two
+negatives are not a demonstration. This is the demonstration.
+
+MuJoCo's `solref = [timeconst, dampratio]` sets how fast a contact constraint
+responds. The default is 0.02 s -- 50 Hz -- which sits inside the observed
+20-100 Hz knee, and that was either coincidence or the mechanism. Scaling it on
+the finger and object geoms together, everything else identical:
+
+| contact timeconst | policy | 20 Hz | 100 Hz | 500 Hz |
+|---|---|---|---|---|
+| **5 ms** (x0.25) | 256 | 260 | 356 *(p = 0.14)* | 376 *(p = 0.14)* |
+| **20 ms** (default) | 312 | 320 | **392** *(p = 0.006)* | **376** *(p = 0.030)* |
+| **80 ms** (x4) | 280 | **376** *(p = 0.018)* | **384** *(p = 0.009)* | **400** *(p = 0.001)* |
+
+**The knee moves, in the predicted direction, across a 16x range.**
+
+At 80 ms the 20 Hz reflex works -- and 20 Hz has been worthless in every other
+condition run in this project. At 5 ms even 500 Hz falls to marginal, both
+sensed arms losing significance under correction. The requirement is roughly
+
+    reflex rate ~ 1 / contact time constant
+
+which is the statement that you have to sample at least as fast as the contact
+responds. Obvious in hindsight; it was not obvious enough for me to get it right
+the first two times.
+
+**This also rules out the confound the rate ladder carries.** A slower arm
+triggers less often, so "rate" and "total time boosted" are entangled by
+construction, and the effect could have been about how much squeezing happened
+rather than when. The contact sweep separates them: at 20 Hz the reflex fires a
+median of **17** times at the default contact and **16** times at the slow one,
+and scores **320** against **376**. Same intervention budget, opposite outcome,
+the only difference being how fast the contact responds. Duty cycle does not
+explain it.
+
+*What this does and does not license.* It supports the mechanism, and with it
+F12's architectural claim: the required rate is a property of the physics, so
+no amount of policy speed substitutes for a fast loop. It does **not** license
+"100 Hz" as a number to quote -- that figure belongs to MuJoCo's default
+contact parameters for this geom pair, and the whole point of this finding is
+that the number moves when the contact does. On real hardware the contact time
+constant is a property of the pad material and the object, and would have to be
+measured.
+
+*Caveats.* n = 12-13 per arm. At x0.25 neither sensed arm survives Holm
+correction, so "the knee moved up" rests on the effect weakening rather than on
+a significant reversal -- the ladder has no rung above 500 Hz, which is the
+simulation's own substep rate, so a knee moving past it cannot be resolved in
+this simulator at all.
+
 ## Methodological
 
 ### M3. Seeding from `hash()` is not reproducible across processes — **CONFIRMED, and it corrects two runs here**

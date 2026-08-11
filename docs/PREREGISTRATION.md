@@ -161,3 +161,27 @@ arm alone, before any reflex arm was run, and it sets the measurement range
 rather than favouring any arm: every arm sees the identical ramp.
 
 Predictions and the analysis plan remain unchanged.
+
+---
+
+## Closing note — what was run after, and what was not
+
+The registered experiment and two follow-ups (F12 rate decoupling, F14 contact
+sweep) are complete. Work stopped here by choice, with hardware deferred, so
+the following are **designed but unrun** and no claim in this repo depends on
+them:
+
+- **A duty-cycle-matched null for F13.** The prediction-versus-arrest reading
+  is not trustworthy without it (the detector is active 40-50% of the carry, so
+  its first firing precedes almost anything), and F13 is filed INCONCLUSIVE for
+  exactly that reason.
+- **A second task and a second policy.** Everything in F11/F12/F14 is
+  `libero_object` task 0 with SmolVLA. This is the most likely thing to break
+  the result and the cheapest to check.
+- **A grip-force-gain sweep.** `force_gain = 6` was picked early and never
+  questioned. This is the number that would specify the hardware.
+- **A detector-threshold sensitivity check.** `cone_ratio > 0.9` was likewise
+  picked early and carried unexamined.
+
+Listed here rather than omitted, so the scope of what was actually tested is
+legible without reading the commit history.

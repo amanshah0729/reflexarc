@@ -30,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 
-from reflexarc.disturb import PostLiftDegrade
+from reflexarc.disturb import ContactTimescale, PostLiftDegrade
 from reflexarc.rng import stable_rng
 from reflexarc.runner import PolicyRunner
 from reflexarc.simreflex import SimRateReflex
@@ -83,6 +83,8 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=15)
     ap.add_argument("--mass-final", type=float, default=400.0)
     ap.add_argument("--ramp-steps", type=int, default=250)
+    ap.add_argument("--contact-factor", type=float, default=1.0,
+                    help="scale the contact solver time constant")
     ap.add_argument("--n-action-steps", type=int, default=20,
                     help="policy replan interval; 20 steps = 1 s at 20 Hz")
     ap.add_argument("--channel", default="cone_ratio")
@@ -127,7 +129,8 @@ def main() -> None:
                 degrade = PostLiftDegrade(mass_final=args.mass_final,
                                           ramp_steps=args.ramp_steps)
                 roll = runner.run(seed=seed, arm=arm, sim_reflex=sim_reflex,
-                                  degrade=degrade)
+                                  degrade=degrade,
+                                  contact=ContactTimescale(args.contact_factor))
                 rec = roll.summary()
                 rec["arm"] = arm
                 with manifest.open("a") as f:
